@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Flutter
+.build/
+.dart_tool/
+ios/Pods/
+android/.gradle/
+
+# Mac
+.DS_Store
+
+# VSCode
+.vscode/
