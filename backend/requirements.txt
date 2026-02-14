@@ -1,5 +1,8 @@
 fastapi
 uvicorn
+sqlmodel
+sqlalchemy
+pydantic
 pandas
 numpy
 python-dotenv
