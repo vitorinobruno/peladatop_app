@@ -1,12 +1,13 @@
+import os
 from sqlmodel import create_engine, Session
 
-DATABASE_URL = "sqlite:///database.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///database.db")
 
-engine = create_engine(
-    DATABASE_URL,
-    echo=True,
-    connect_args={"check_same_thread": False}
-)
+# Render usa postgres://, SQLAlchemy exige postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL, echo=True)
 
 def get_session():
     with Session(engine) as session:

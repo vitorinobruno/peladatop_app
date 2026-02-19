@@ -6,3 +6,4 @@ pydantic
 pandas
 numpy
 python-dotenv
+psycopg2-binary

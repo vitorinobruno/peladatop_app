@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends
 from sqlmodel import SQLModel, Session, create_engine, select, delete
 from models import Atleta, Pelada, PeladaCreate, Presenca, PresencaCreate, Time, TimeAtleta, TimeCreate, Jogo, Partida, EventoPartida
 from datetime import date, datetime
-from database import get_session
+from backend.database_antigo import get_session
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
