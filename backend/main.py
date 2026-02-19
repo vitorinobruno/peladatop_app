@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends
 from sqlmodel import SQLModel, Session, create_engine, select, delete
 from models import Atleta, Pelada, PeladaCreate, Presenca, PresencaCreate, Time, TimeAtleta, TimeCreate, Jogo, Partida, EventoPartida
 from datetime import date, datetime
-from database import get_session
+from database import get_session, engine
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,12 +15,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-engine = create_engine("sqlite:///database.db")
-
-@app.on_event("startup")
-def on_startup():
-    SQLModel.metadata.create_all(engine)
 
 @app.post("/atletas")
 def criar_atleta(atleta: Atleta):
