@@ -4,8 +4,17 @@ from models import Atleta, Pelada, PeladaCreate, Presenca, PresencaCreate, Time,
 from datetime import date, datetime
 from database import get_session
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # depois pode restringir
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 engine = create_engine("sqlite:///database.db")
 
