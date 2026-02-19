@@ -16,6 +16,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+def on_startup():
+    from database import engine
+    SQLModel.metadata.create_all(engine)
+    
 @app.post("/atletas")
 def criar_atleta(atleta: Atleta):
     with Session(engine) as session:
