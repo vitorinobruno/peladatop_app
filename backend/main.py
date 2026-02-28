@@ -154,7 +154,12 @@ def criar_times(
     times: list[TimeCreate],
     session: Session = Depends(get_session)
 ):
-    # Remove times antigos
+    # verifica se já existem jogos criados
+    jogos_existentes = session.exec(
+        select(Jogo).where(Jogo.pelada_id == pelada_id)
+    ).all()
+
+    # remove times antigos
     times_antigos = session.exec(
         select(Time).where(Time.pelada_id == pelada_id)
     ).all()
@@ -167,12 +172,13 @@ def criar_times(
 
     session.commit()
 
-    # apagar jogos da pelada
-    session.exec(
-        delete(Jogo).where(Jogo.pelada_id == pelada_id)
-    )
+    # só apaga jogos se ainda não foram criados
+    if not jogos_existentes:
+        session.exec(
+            delete(Jogo).where(Jogo.pelada_id == pelada_id)
+        )
 
-    # Cria novos times
+    # cria novos times
     for t in times:
         time = Time(
             pelada_id=pelada_id,
@@ -183,7 +189,6 @@ def criar_times(
         session.commit()
         session.refresh(time)
 
-        # 👇 AQUI É O PONTO-CHAVE
         for atleta_id in t.atletas_ids:
             session.add(
                 TimeAtleta(
