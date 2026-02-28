@@ -154,48 +154,53 @@ def criar_times(
     times: list[TimeCreate],
     session: Session = Depends(get_session)
 ):
-    # verifica se já existem jogos criados
     jogos_existentes = session.exec(
         select(Jogo).where(Jogo.pelada_id == pelada_id)
     ).all()
 
-    # remove times antigos
-    times_antigos = session.exec(
+    times_existentes = session.exec(
         select(Time).where(Time.pelada_id == pelada_id)
     ).all()
 
-    for t in times_antigos:
+    if jogos_existentes and times_existentes:
+        # ── Atualiza times existentes preservando IDs ──
+        for i, time_existente in enumerate(times_existentes):
+            if i >= len(times):
+                break
+            t = times[i]
+            time_existente.nome = t.nome
+            time_existente.cor = t.cor
+            session.add(time_existente)
+
+            # atualiza atletas do time
+            session.exec(
+                delete(TimeAtleta).where(TimeAtleta.time_id == time_existente.id)
+            )
+            for atleta_id in t.atletas_ids:
+                session.add(TimeAtleta(
+                    time_id=time_existente.id,
+                    atleta_id=atleta_id
+                ))
+
+        session.commit()
+        return {"msg": "Times atualizados com sucesso"}
+
+    # ── Sem jogos: recria tudo normalmente ──
+    for t in times_existentes:
         session.exec(
             delete(TimeAtleta).where(TimeAtleta.time_id == t.id)
         )
         session.delete(t)
-
     session.commit()
 
-    # só apaga jogos se ainda não foram criados
-    if not jogos_existentes:
-        session.exec(
-            delete(Jogo).where(Jogo.pelada_id == pelada_id)
-        )
-
-    # cria novos times
     for t in times:
-        time = Time(
-            pelada_id=pelada_id,
-            nome=t.nome,
-            cor=t.cor
-        )
+        time = Time(pelada_id=pelada_id, nome=t.nome, cor=t.cor)
         session.add(time)
         session.commit()
         session.refresh(time)
 
         for atleta_id in t.atletas_ids:
-            session.add(
-                TimeAtleta(
-                    time_id=time.id,
-                    atleta_id=atleta_id
-                )
-            )
+            session.add(TimeAtleta(time_id=time.id, atleta_id=atleta_id))
 
     session.commit()
     return {"msg": "Times salvos com sucesso"}
