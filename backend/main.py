@@ -369,8 +369,10 @@ def registrar_gol(
 
     if time_id == jogo.time_a_id:
         partida.placar_a += 1
+        jogo.gols_time_a += 1  # ← adiciona isso
     elif time_id == jogo.time_b_id:
         partida.placar_b += 1
+        jogo.gols_time_b += 1  # ← adiciona isso
     else:
         raise HTTPException(400, "Time não pertence ao jogo")
 
@@ -384,6 +386,7 @@ def registrar_gol(
 
     session.add(gol)
     session.add(partida)
+    session.add(jogo)  # ← adiciona isso
     session.commit()
 
     return {"ok": True}
