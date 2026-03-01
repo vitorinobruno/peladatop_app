@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.responses import HTMLResponse
 from sqlmodel import SQLModel, Session, create_engine, select, delete
 from models import Atleta, Pelada, PeladaCreate, Presenca, PresencaCreate, Time, TimeAtleta, TimeCreate, Jogo, Partida, EventoPartida
 from datetime import date, datetime
@@ -689,5 +690,306 @@ def pontos_no_ano(session: Session = Depends(get_session)):
     ranking.sort(key=lambda x: x["pontos"], reverse=True)
     return ranking
 
+@app.get("/peladas/{pelada_id}/presenca-link", response_class=HTMLResponse)
+def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
+    pelada = session.get(Pelada, pelada_id)
+    if not pelada:
+        return HTMLResponse("<h2>Pelada não encontrada</h2>", status_code=404)
+
+    atletas = session.exec(select(Atleta).where(Atleta.mensalista == True)).all()
+
+    opcoes = "".join([
+        f'<option value="{a.id}">{a.nome}</option>'
+        for a in atletas
+    ])
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PeladaTop — Presença</title>
+        <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: #f0f4f8;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }}
+            .card {{
+                background: white;
+                border-radius: 16px;
+                padding: 32px 24px;
+                max-width: 420px;
+                width: 100%;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            }}
+            .logo {{
+                text-align: center;
+                font-size: 48px;
+                margin-bottom: 8px;
+            }}
+            h1 {{
+                text-align: center;
+                font-size: 22px;
+                color: #1a1a1a;
+                margin-bottom: 4px;
+            }}
+            .subtitulo {{
+                text-align: center;
+                color: #666;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }}
+            .vagas {{
+                text-align: center;
+                font-size: 14px;
+                font-weight: 600;
+                color: #1E88E5;
+                margin-bottom: 24px;
+            }}
+            label {{
+                display: block;
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 8px;
+            }}
+            select {{
+                width: 100%;
+                padding: 12px 16px;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                font-size: 16px;
+                color: #333;
+                background: white;
+                appearance: none;
+                margin-bottom: 20px;
+                outline: none;
+            }}
+            select:focus {{ border-color: #1E88E5; }}
+            .botoes {{
+                display: flex;
+                gap: 12px;
+                margin-bottom: 24px;
+            }}
+            button {{
+                flex: 1;
+                padding: 14px;
+                border: none;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }}
+            button:active {{ opacity: 0.8; }}
+            .btn-confirmar {{
+                background: #43A047;
+                color: white;
+            }}
+            .btn-cancelar {{
+                background: #f5f5f5;
+                color: #e53935;
+                border: 2px solid #e53935;
+            }}
+            .mensagem {{
+                display: none;
+                text-align: center;
+                padding: 16px;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 600;
+                margin-bottom: 16px;
+            }}
+            .sucesso {{ background: #e8f5e9; color: #2e7d32; }}
+            .erro {{ background: #ffebee; color: #c62828; }}
+            .divider {{
+                border: none;
+                border-top: 1px solid #eee;
+                margin-bottom: 16px;
+            }}
+            .lista-titulo {{
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 10px;
+            }}
+            .atleta-confirmado {{
+                display: flex;
+                align-items: center;
+                padding: 8px 12px;
+                margin-bottom: 6px;
+                background: #e8f5e9;
+                border-radius: 8px;
+                font-size: 15px;
+            }}
+            .atleta-confirmado span.icone {{
+                margin-right: 8px;
+            }}
+            .atleta-confirmado span.nome {{
+                font-weight: 600;
+                color: #2e7d32;
+            }}
+            .vazio {{
+                color: #aaa;
+                font-size: 14px;
+                text-align: center;
+                padding: 8px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="logo">⚽</div>
+            <h1>PeladaTop</h1>
+            <div class="subtitulo">{pelada.local} — {pelada.data}</div>
+            <div class="vagas" id="vagas">Carregando...</div>
+
+            <label>Seu nome</label>
+            <select id="atleta">
+                <option value="">— Selecione —</option>
+                {opcoes}
+            </select>
+
+            <div class="botoes">
+                <button class="btn-confirmar" onclick="responder(true)">
+                    ✅ Vou!
+                </button>
+                <button class="btn-cancelar" onclick="responder(false)">
+                    ❌ Não vou
+                </button>
+            </div>
+
+            <div class="mensagem" id="mensagem"></div>
+
+            <hr class="divider">
+
+            <div class="lista-titulo" id="lista-titulo">Confirmados</div>
+            <div id="lista-confirmados">
+                <div class="vazio">Carregando...</div>
+            </div>
+        </div>
+
+        <script>
+            const peladaId = {pelada_id};
+            const baseUrl = window.location.origin;
+
+            async function carregarStatus() {{
+                try {{
+                    const resp = await fetch(`${{baseUrl}}/peladas/${{peladaId}}/presencas`);
+                    const presencas = await resp.json();
+                    const vagas = 30 - presencas.length;
+
+                    document.getElementById('vagas').textContent =
+                        `✅ ${{presencas.length}} confirmados — ${{vagas}} vagas restantes`;
+
+                    document.getElementById('lista-titulo').textContent =
+                        `Confirmados (${{presencas.length}})`;
+
+                    const lista = document.getElementById('lista-confirmados');
+                    if (presencas.length === 0) {{
+                        lista.innerHTML = '<div class="vazio">Nenhum confirmado ainda.</div>';
+                    }} else {{
+                        lista.innerHTML = presencas.map(a => `
+                            <div class="atleta-confirmado">
+                                <span class="icone">✅</span>
+                                <span class="nome">${{a.nome}}</span>
+                            </div>
+                        `).join('');
+                    }}
+                }} catch (e) {{
+                    console.error('Erro ao carregar status:', e);
+                }}
+            }}
+
+            async function responder(confirmar) {{
+                const atletaId = document.getElementById('atleta').value;
+                if (!atletaId) {{
+                    mostrarMensagem('Selecione seu nome!', false);
+                    return;
+                }}
+
+                const url = confirmar
+                    ? `${{baseUrl}}/peladas/${{peladaId}}/presenca-confirmar/${{atletaId}}`
+                    : `${{baseUrl}}/peladas/${{peladaId}}/presenca-cancelar/${{atletaId}}`;
+
+                try {{
+                    const resp = await fetch(url, {{ method: 'POST' }});
+                    const data = await resp.json();
+
+                    mostrarMensagem(
+                        confirmar ? '✅ Presença confirmada!' : '❌ Presença cancelada.',
+                        resp.ok
+                    );
+
+                    await carregarStatus();
+                }} catch (e) {{
+                    mostrarMensagem('Erro de conexão. Tente novamente.', false);
+                }}
+            }}
+
+            function mostrarMensagem(texto, sucesso) {{
+                const el = document.getElementById('mensagem');
+                el.textContent = texto;
+                el.className = 'mensagem ' + (sucesso ? 'sucesso' : 'erro');
+                el.style.display = 'block';
+                setTimeout(() => {{ el.style.display = 'none'; }}, 3000);
+            }}
+
+            // carrega ao abrir e atualiza a cada 5 segundos
+            carregarStatus();
+            setInterval(carregarStatus, 5000);
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)
+
+@app.post("/peladas/{pelada_id}/presenca-confirmar/{atleta_id}")
+def confirmar_presenca_link(
+    pelada_id: int,
+    atleta_id: int,
+    session: Session = Depends(get_session)
+):
+    # verifica se já confirmou
+    existente = session.exec(
+        select(Presenca).where(
+            Presenca.pelada_id == pelada_id,
+            Presenca.atleta_id == atleta_id
+        )
+    ).first()
+
+    if existente:
+        return {"msg": "Presença já confirmada"}
+
+    session.add(Presenca(pelada_id=pelada_id, atleta_id=atleta_id))
+    session.commit()
+    return {"msg": "Presença confirmada!"}
+
+
+@app.post("/peladas/{pelada_id}/presenca-cancelar/{atleta_id}")
+def cancelar_presenca_link(
+    pelada_id: int,
+    atleta_id: int,
+    session: Session = Depends(get_session)
+):
+    presenca = session.exec(
+        select(Presenca).where(
+            Presenca.pelada_id == pelada_id,
+            Presenca.atleta_id == atleta_id
+        )
+    ).first()
+
+    if presenca:
+        session.delete(presenca)
+        session.commit()
+
+    return {"msg": "Presença cancelada"}
 
 
