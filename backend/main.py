@@ -992,4 +992,39 @@ def cancelar_presenca_link(
 
     return {"msg": "Presença cancelada"}
 
+class ImportarStats(SQLModel):
+    gols: int
+    assistencias: int
 
+@app.post("/atletas/{atleta_id}/importar-stats")
+def importar_stats(
+    atleta_id: int,
+    dados: ImportarStats,
+    session: Session = Depends(get_session)
+):
+    atleta = session.get(Atleta, atleta_id)
+    if not atleta:
+        raise HTTPException(404, "Atleta não encontrado")
+
+    # cria eventos históricos fictícios para gols
+    for _ in range(dados.gols):
+        session.add(EventoPartida(
+            partida_id=1,  # partida fictícia
+            time_id=1,
+            atleta_gol_id=atleta_id,
+            atleta_assistencia_id=None,
+            instante_segundos=0
+        ))
+
+    # cria eventos históricos fictícios para assistências
+    for _ in range(dados.assistencias):
+        session.add(EventoPartida(
+            partida_id=1,
+            time_id=1,
+            atleta_gol_id=atleta_id,
+            atleta_assistencia_id=atleta_id,
+            instante_segundos=0
+        ))
+
+    session.commit()
+    return {"msg": f"Stats importadas: {dados.gols} gols, {dados.assistencias} assistências"}
