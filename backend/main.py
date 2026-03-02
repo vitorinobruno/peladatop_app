@@ -1006,17 +1006,32 @@ def importar_stats(
     if not atleta:
         raise HTTPException(404, "Atleta não encontrado")
 
-    # cria eventos históricos fictícios para gols
+    # apaga eventos históricos anteriores do atleta (partida_id=1)
+    session.exec(
+        delete(EventoPartida).where(
+            EventoPartida.partida_id == 1,
+            EventoPartida.atleta_gol_id == atleta_id
+        )
+    )
+    session.exec(
+        delete(EventoPartida).where(
+            EventoPartida.partida_id == 1,
+            EventoPartida.atleta_assistencia_id == atleta_id
+        )
+    )
+    session.commit()
+
+    # insere gols
     for _ in range(dados.gols):
         session.add(EventoPartida(
-            partida_id=1,  # partida fictícia
+            partida_id=1,
             time_id=1,
             atleta_gol_id=atleta_id,
             atleta_assistencia_id=None,
             instante_segundos=0
         ))
 
-    # cria eventos históricos fictícios para assistências
+    # insere assistências
     for _ in range(dados.assistencias):
         session.add(EventoPartida(
             partida_id=1,
