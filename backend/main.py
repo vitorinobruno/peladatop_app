@@ -604,7 +604,9 @@ def finalizar_pelada(
 @app.get("/estatisticas/gols")
 def ranking_gols(session: Session = Depends(get_session)):
 
-    eventos = session.exec(select(EventoPartida)).all()
+    eventos = session.exec(
+        select(EventoPartida).where(EventoPartida.atleta_gol_id != None)
+    ).all()
 
     contagem = {}
 
@@ -615,11 +617,12 @@ def ranking_gols(session: Session = Depends(get_session)):
 
     for atleta_id, gols in contagem.items():
         atleta = session.get(Atleta, atleta_id)
-        ranking.append({
-            "atleta_id": atleta.id,
-            "nome": atleta.nome,
-            "gols": gols
-        })
+        if atleta:
+            ranking.append({
+                "atleta_id": atleta.id,
+                "nome": atleta.nome,
+                "gols": gols
+            })
 
     ranking.sort(key=lambda x: x["gols"], reverse=True)
     return ranking
@@ -1006,7 +1009,7 @@ def importar_stats(
     if not atleta:
         raise HTTPException(404, "Atleta não encontrado")
 
-    # apaga eventos históricos anteriores do atleta (partida_id=1)
+    # apaga eventos históricos anteriores
     session.exec(
         delete(EventoPartida).where(
             EventoPartida.partida_id == 1,
@@ -1031,12 +1034,13 @@ def importar_stats(
             instante_segundos=0
         ))
 
-    # insere assistências
+    # insere assistências — usa atleta_gol_id=1 (Bruno) como neutro
+    # e atleta_assistencia_id=atleta_id para registrar corretamente
     for _ in range(dados.assistencias):
         session.add(EventoPartida(
             partida_id=1,
             time_id=1,
-            atleta_gol_id=atleta_id,
+            atleta_gol_id=None,  # ← sem autor de gol
             atleta_assistencia_id=atleta_id,
             instante_segundos=0
         ))

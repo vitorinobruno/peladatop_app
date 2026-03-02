@@ -79,7 +79,7 @@ class EventoPartida(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     partida_id: int
     time_id: int
-    atleta_gol_id: int
+    atleta_gol_id: Optional[int] = None  # ← torna opcional
     atleta_assistencia_id: Optional[int] = None
     instante_segundos: int
 
