@@ -924,18 +924,23 @@ def confirmar_presenca_link(
     atleta_id: int,
     session: Session = Depends(get_session)
 ):
-    # verifica se já confirmou
-    existente = session.exec(
+    presenca = session.exec(
         select(Presenca).where(
             Presenca.pelada_id == pelada_id,
             Presenca.atleta_id == atleta_id
         )
     ).first()
 
-    if existente:
-        return {"msg": "Presença já confirmada"}
+    if presenca:
+        presenca.confirmado = True  # ← atualiza mesmo se já existir
+        session.add(presenca)
+    else:
+        session.add(Presenca(
+            pelada_id=pelada_id,
+            atleta_id=atleta_id,
+            confirmado=True
+        ))
 
-    session.add(Presenca(pelada_id=pelada_id, atleta_id=atleta_id))
     session.commit()
     return {"msg": "Presença confirmada!"}
 
