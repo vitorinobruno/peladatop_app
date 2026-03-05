@@ -732,119 +732,48 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                 width: 100%;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.1);
             }}
-            .logo {{
-                text-align: center;
-                font-size: 48px;
-                margin-bottom: 8px;
-            }}
-            h1 {{
-                text-align: center;
-                font-size: 22px;
-                color: #1a1a1a;
-                margin-bottom: 4px;
-            }}
-            .subtitulo {{
-                text-align: center;
-                color: #666;
-                font-size: 14px;
-                margin-bottom: 8px;
-            }}
-            .vagas {{
-                text-align: center;
-                font-size: 14px;
-                font-weight: 600;
-                color: #1E88E5;
-                margin-bottom: 24px;
-            }}
-            label {{
-                display: block;
-                font-size: 14px;
-                font-weight: 600;
-                color: #333;
-                margin-bottom: 8px;
-            }}
+            .logo {{ text-align: center; font-size: 48px; margin-bottom: 8px; }}
+            h1 {{ text-align: center; font-size: 22px; color: #1a1a1a; margin-bottom: 4px; }}
+            .subtitulo {{ text-align: center; color: #666; font-size: 14px; margin-bottom: 8px; }}
+            .vagas {{ text-align: center; font-size: 14px; font-weight: 600; color: #1E88E5; margin-bottom: 24px; }}
+            label {{ display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; }}
             select {{
-                width: 100%;
-                padding: 12px 16px;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                font-size: 16px;
-                color: #333;
-                background: white;
-                appearance: none;
-                margin-bottom: 20px;
-                outline: none;
+                width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0;
+                border-radius: 10px; font-size: 16px; color: #333;
+                background: white; appearance: none; margin-bottom: 20px; outline: none;
             }}
             select:focus {{ border-color: #1E88E5; }}
-            .botoes {{
-                display: flex;
-                gap: 12px;
-                margin-bottom: 24px;
-            }}
+            .botoes {{ display: flex; gap: 12px; margin-bottom: 24px; }}
             button {{
-                flex: 1;
-                padding: 14px;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: opacity 0.2s;
+                flex: 1; padding: 14px; border: none; border-radius: 10px;
+                font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
             }}
             button:active {{ opacity: 0.8; }}
-            .btn-confirmar {{
-                background: #43A047;
-                color: white;
-            }}
-            .btn-cancelar {{
-                background: #f5f5f5;
-                color: #e53935;
-                border: 2px solid #e53935;
-            }}
+            .btn-confirmar {{ background: #43A047; color: white; }}
+            .btn-cancelar {{ background: #f5f5f5; color: #e53935; border: 2px solid #e53935; }}
             .mensagem {{
-                display: none;
-                text-align: center;
-                padding: 16px;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: 600;
-                margin-bottom: 16px;
+                display: none; text-align: center; padding: 16px;
+                border-radius: 10px; font-size: 16px; font-weight: 600; margin-bottom: 16px;
             }}
             .sucesso {{ background: #e8f5e9; color: #2e7d32; }}
             .erro {{ background: #ffebee; color: #c62828; }}
-            .divider {{
-                border: none;
-                border-top: 1px solid #eee;
-                margin-bottom: 16px;
+            .divider {{ border: none; border-top: 1px solid #eee; margin: 16px 0; }}
+            .secao-titulo {{
+                font-size: 14px; font-weight: 600; color: #333; margin-bottom: 10px;
             }}
-            .lista-titulo {{
-                font-size: 14px;
-                font-weight: 600;
-                color: #333;
-                margin-bottom: 10px;
+            .atleta-item {{
+                display: flex; align-items: center; padding: 8px 12px;
+                margin-bottom: 6px; border-radius: 8px; font-size: 15px;
             }}
-            .atleta-confirmado {{
-                display: flex;
-                align-items: center;
-                padding: 8px 12px;
-                margin-bottom: 6px;
-                background: #e8f5e9;
-                border-radius: 8px;
-                font-size: 15px;
-            }}
-            .atleta-confirmado span.icone {{
-                margin-right: 8px;
-            }}
-            .atleta-confirmado span.nome {{
-                font-weight: 600;
-                color: #2e7d32;
-            }}
-            .vazio {{
-                color: #aaa;
-                font-size: 14px;
-                text-align: center;
-                padding: 8px;
-            }}
+            .confirmado-item {{ background: #e8f5e9; }}
+            .ausente-item {{ background: #ffebee; }}
+            .sem-resposta-item {{ background: #fff8e1; }}
+            .atleta-item .icone {{ margin-right: 8px; }}
+            .atleta-item .nome {{ font-weight: 600; }}
+            .confirmado-item .nome {{ color: #2e7d32; }}
+            .ausente-item .nome {{ color: #c62828; }}
+            .sem-resposta-item .nome {{ color: #f57f17; }}
+            .vazio {{ color: #aaa; font-size: 14px; text-align: center; padding: 8px; }}
         </style>
     </head>
     <body>
@@ -861,22 +790,23 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             </select>
 
             <div class="botoes">
-                <button class="btn-confirmar" onclick="responder(true)">
-                    ✅ Vou!
-                </button>
-                <button class="btn-cancelar" onclick="responder(false)">
-                    ❌ Não vou
-                </button>
+                <button class="btn-confirmar" onclick="responder(true)">✅ Vou!</button>
+                <button class="btn-cancelar" onclick="responder(false)">❌ Não vou</button>
             </div>
 
             <div class="mensagem" id="mensagem"></div>
 
             <hr class="divider">
+            <div class="secao-titulo" id="titulo-confirmados">Confirmados (0)</div>
+            <div id="lista-confirmados"><div class="vazio">Carregando...</div></div>
 
-            <div class="lista-titulo" id="lista-titulo">Confirmados</div>
-            <div id="lista-confirmados">
-                <div class="vazio">Carregando...</div>
-            </div>
+            <hr class="divider">
+            <div class="secao-titulo" id="titulo-ausentes">Ausentes (0)</div>
+            <div id="lista-ausentes"><div class="vazio">Carregando...</div></div>
+
+            <hr class="divider">
+            <div class="secao-titulo" id="titulo-sem-resposta">Sem resposta (0)</div>
+            <div id="lista-sem-resposta"><div class="vazio">Carregando...</div></div>
         </div>
 
         <script>
@@ -885,27 +815,65 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
 
             async function carregarStatus() {{
                 try {{
-                    const resp = await fetch(`${{baseUrl}}/peladas/${{peladaId}}/presencas`);
-                    const presencas = await resp.json();
-                    const vagas = 30 - presencas.length;
+                    const [resPresencas, resAtletas] = await Promise.all([
+                        fetch(`${{baseUrl}}/peladas/${{peladaId}}/presencas-completo`),
+                        fetch(`${{baseUrl}}/atletas`)
+                    ]);
 
+                    const presencas = await resPresencas.json();
+                    const todosAtletas = await resAtletas.json();
+                    const mensalistas = todosAtletas.filter(a => a.mensalista);
+
+                    const idsConfirmados = presencas.filter(p => p.confirmado).map(p => p.atleta_id);
+                    const idsAusentes = presencas.filter(p => !p.confirmado).map(p => p.atleta_id);
+                    const idsSemResposta = mensalistas
+                        .filter(a => !idsConfirmados.includes(a.id) && !idsAusentes.includes(a.id))
+                        .map(a => a.id);
+
+                    const vagas = 30 - idsConfirmados.length;
                     document.getElementById('vagas').textContent =
-                        `✅ ${{presencas.length}} confirmados — ${{vagas}} vagas restantes`;
+                        `✅ ${{idsConfirmados.length}} confirmados — ${{vagas}} vagas restantes`;
 
-                    document.getElementById('lista-titulo').textContent =
-                        `Confirmados (${{presencas.length}})`;
+                    document.getElementById('titulo-confirmados').textContent =
+                        `Confirmados (${{idsConfirmados.length}})`;
+                    document.getElementById('titulo-ausentes').textContent =
+                        `Ausentes (${{idsAusentes.length}})`;
+                    document.getElementById('titulo-sem-resposta').textContent =
+                        `Sem resposta (${{idsSemResposta.length}})`;
 
-                    const lista = document.getElementById('lista-confirmados');
-                    if (presencas.length === 0) {{
-                        lista.innerHTML = '<div class="vazio">Nenhum confirmado ainda.</div>';
-                    }} else {{
-                        lista.innerHTML = presencas.map(a => `
-                            <div class="atleta-confirmado">
+                    document.getElementById('lista-confirmados').innerHTML =
+                        idsConfirmados.length === 0
+                        ? '<div class="vazio">Nenhum confirmado ainda.</div>'
+                        : idsConfirmados.map(id => {{
+                            const a = todosAtletas.find(x => x.id === id);
+                            return `<div class="atleta-item confirmado-item">
                                 <span class="icone">✅</span>
-                                <span class="nome">${{a.nome}}</span>
-                            </div>
-                        `).join('');
-                    }}
+                                <span class="nome">${{a?.nome ?? '?'}}</span>
+                            </div>`;
+                        }}).join('');
+
+                    document.getElementById('lista-ausentes').innerHTML =
+                        idsAusentes.length === 0
+                        ? '<div class="vazio">Nenhuma ausência confirmada.</div>'
+                        : idsAusentes.map(id => {{
+                            const a = todosAtletas.find(x => x.id === id);
+                            return `<div class="atleta-item ausente-item">
+                                <span class="icone">❌</span>
+                                <span class="nome">${{a?.nome ?? '?'}}</span>
+                            </div>`;
+                        }}).join('');
+
+                    document.getElementById('lista-sem-resposta').innerHTML =
+                        idsSemResposta.length === 0
+                        ? '<div class="vazio">Todos responderam! 🎉</div>'
+                        : idsSemResposta.map(id => {{
+                            const a = todosAtletas.find(x => x.id === id);
+                            return `<div class="atleta-item sem-resposta-item">
+                                <span class="icone">⏳</span>
+                                <span class="nome">${{a?.nome ?? '?'}}</span>
+                            </div>`;
+                        }}).join('');
+
                 }} catch (e) {{
                     console.error('Erro ao carregar status:', e);
                 }}
@@ -924,13 +892,10 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
 
                 try {{
                     const resp = await fetch(url, {{ method: 'POST' }});
-                    const data = await resp.json();
-
                     mostrarMensagem(
                         confirmar ? '✅ Presença confirmada!' : '❌ Presença cancelada.',
                         resp.ok
                     );
-
                     await carregarStatus();
                 }} catch (e) {{
                     mostrarMensagem('Erro de conexão. Tente novamente.', false);
@@ -945,7 +910,6 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                 setTimeout(() => {{ el.style.display = 'none'; }}, 3000);
             }}
 
-            // carrega ao abrir e atualiza a cada 5 segundos
             carregarStatus();
             setInterval(carregarStatus, 5000);
         </script>
@@ -990,10 +954,24 @@ def cancelar_presenca_link(
     ).first()
 
     if presenca:
-        session.delete(presenca)
-        session.commit()
+        presenca.confirmado = False
+        session.add(presenca)
+    else:
+        session.add(Presenca(
+            pelada_id=pelada_id,
+            atleta_id=atleta_id,
+            confirmado=False
+        ))
 
+    session.commit()
     return {"msg": "Presença cancelada"}
+
+@app.get("/peladas/{pelada_id}/presencas-completo")
+def listar_presencas_completo(pelada_id: int, session: Session = Depends(get_session)):
+    presencas = session.exec(
+        select(Presenca).where(Presenca.pelada_id == pelada_id)
+    ).all()
+    return [{"atleta_id": p.atleta_id, "confirmado": p.confirmado} for p in presencas]
 
 class ImportarStats(SQLModel):
     gols: int
