@@ -602,52 +602,63 @@ def finalizar_pelada(
     }
 
 @app.get("/estatisticas/gols")
-def ranking_gols(session: Session = Depends(get_session)):
+def ranking_gols(pelada_id: Optional[int] = None, session: Session = Depends(get_session)):
+    query = select(EventoPartida).where(EventoPartida.atleta_gol_id != None)
+    
+    if pelada_id:
+        # filtra apenas partidas da pelada
+        jogos = session.exec(
+            select(Jogo).where(Jogo.pelada_id == pelada_id)
+        ).all()
+        jogo_ids = [j.id for j in jogos]
+        partidas = session.exec(
+            select(Partida).where(Partida.jogo_id.in_(jogo_ids))
+        ).all()
+        partida_ids = [p.id for p in partidas]
+        query = query.where(EventoPartida.partida_id.in_(partida_ids))
 
-    eventos = session.exec(
-        select(EventoPartida).where(EventoPartida.atleta_gol_id != None)
-    ).all()
+    eventos = session.exec(query).all()
 
     contagem = {}
-
     for e in eventos:
         contagem[e.atleta_gol_id] = contagem.get(e.atleta_gol_id, 0) + 1
 
     ranking = []
-
     for atleta_id, gols in contagem.items():
         atleta = session.get(Atleta, atleta_id)
         if atleta:
-            ranking.append({
-                "atleta_id": atleta.id,
-                "nome": atleta.nome,
-                "gols": gols
-            })
+            ranking.append({"atleta_id": atleta.id, "nome": atleta.nome, "gols": gols})
 
     ranking.sort(key=lambda x: x["gols"], reverse=True)
     return ranking
 
-@app.get("/estatisticas/assistencias")
-def ranking_assistencias(session: Session = Depends(get_session)):
 
-    eventos = session.exec(select(EventoPartida)).all()
+@app.get("/estatisticas/assistencias")
+def ranking_assistencias(pelada_id: Optional[int] = None, session: Session = Depends(get_session)):
+    query = select(EventoPartida).where(EventoPartida.atleta_assistencia_id != None)
+
+    if pelada_id:
+        jogos = session.exec(
+            select(Jogo).where(Jogo.pelada_id == pelada_id)
+        ).all()
+        jogo_ids = [j.id for j in jogos]
+        partidas = session.exec(
+            select(Partida).where(Partida.jogo_id.in_(jogo_ids))
+        ).all()
+        partida_ids = [p.id for p in partidas]
+        query = query.where(EventoPartida.partida_id.in_(partida_ids))
+
+    eventos = session.exec(query).all()
 
     contagem = {}
-
     for e in eventos:
-        if e.atleta_assistencia_id:
-            contagem[e.atleta_assistencia_id] = \
-                contagem.get(e.atleta_assistencia_id, 0) + 1
+        contagem[e.atleta_assistencia_id] = contagem.get(e.atleta_assistencia_id, 0) + 1
 
     ranking = []
-
-    for atleta_id, assists in contagem.items():
+    for atleta_id, assistencias in contagem.items():
         atleta = session.get(Atleta, atleta_id)
-        ranking.append({
-            "atleta_id": atleta.id,
-            "nome": atleta.nome,
-            "assistencias": assists
-        })
+        if atleta:
+            ranking.append({"atleta_id": atleta.id, "nome": atleta.nome, "assistencias": assistencias})
 
     ranking.sort(key=lambda x: x["assistencias"], reverse=True)
     return ranking
