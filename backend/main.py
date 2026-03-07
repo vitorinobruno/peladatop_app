@@ -6,6 +6,7 @@ from datetime import date, datetime
 from database import get_session, engine
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import col
 
 app = FastAPI()
 
@@ -603,21 +604,30 @@ def finalizar_pelada(
 
 @app.get("/estatisticas/gols")
 def ranking_gols(pelada_id: Optional[int] = None, session: Session = Depends(get_session)):
-    query = select(EventoPartida).where(EventoPartida.atleta_gol_id != None)
     
     if pelada_id:
-        # filtra apenas partidas da pelada
+        # busca jogo_ids da pelada
         jogos = session.exec(
             select(Jogo).where(Jogo.pelada_id == pelada_id)
         ).all()
         jogo_ids = [j.id for j in jogos]
+        
+        # busca partida_ids dos jogos
         partidas = session.exec(
-            select(Partida).where(Partida.jogo_id.in_(jogo_ids))
+            select(Partida).where(col(Partida.jogo_id).in_(jogo_ids))
         ).all()
         partida_ids = [p.id for p in partidas]
-        query = query.where(EventoPartida.partida_id.in_(partida_ids))
 
-    eventos = session.exec(query).all()
+        eventos = session.exec(
+            select(EventoPartida).where(
+                col(EventoPartida.atleta_gol_id) != None,
+                col(EventoPartida.partida_id).in_(partida_ids)
+            )
+        ).all()
+    else:
+        eventos = session.exec(
+            select(EventoPartida).where(col(EventoPartida.atleta_gol_id) != None)
+        ).all()
 
     contagem = {}
     for e in eventos:
@@ -635,20 +645,28 @@ def ranking_gols(pelada_id: Optional[int] = None, session: Session = Depends(get
 
 @app.get("/estatisticas/assistencias")
 def ranking_assistencias(pelada_id: Optional[int] = None, session: Session = Depends(get_session)):
-    query = select(EventoPartida).where(EventoPartida.atleta_assistencia_id != None)
-
+    
     if pelada_id:
         jogos = session.exec(
             select(Jogo).where(Jogo.pelada_id == pelada_id)
         ).all()
         jogo_ids = [j.id for j in jogos]
+        
         partidas = session.exec(
-            select(Partida).where(Partida.jogo_id.in_(jogo_ids))
+            select(Partida).where(col(Partida.jogo_id).in_(jogo_ids))
         ).all()
         partida_ids = [p.id for p in partidas]
-        query = query.where(EventoPartida.partida_id.in_(partida_ids))
 
-    eventos = session.exec(query).all()
+        eventos = session.exec(
+            select(EventoPartida).where(
+                col(EventoPartida.atleta_assistencia_id) != None,
+                col(EventoPartida.partida_id).in_(partida_ids)
+            )
+        ).all()
+    else:
+        eventos = session.exec(
+            select(EventoPartida).where(col(EventoPartida.atleta_assistencia_id) != None)
+        ).all()
 
     contagem = {}
     for e in eventos:
