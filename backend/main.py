@@ -787,8 +787,11 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             .sucesso {{ background: #e8f5e9; color: #2e7d32; }}
             .erro {{ background: #ffebee; color: #c62828; }}
             .divider {{ border: none; border-top: 1px solid #eee; margin: 16px 0; }}
-            .secao-titulo {{
-                font-size: 14px; font-weight: 600; color: #333; margin-bottom: 10px;
+            .secao-titulo {{ font-size: 14px; font-weight: 600; color: #333; margin-bottom: 10px; }}
+            .posicao-titulo {{
+                font-size: 11px; font-weight: 700; color: #888;
+                text-transform: uppercase; margin-bottom: 4px; margin-top: 10px;
+                letter-spacing: 0.5px;
             }}
             .atleta-item {{
                 display: flex; align-items: center; padding: 8px 12px;
@@ -841,6 +844,7 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
         <script>
             const peladaId = {pelada_id};
             const baseUrl = window.location.origin;
+            const ordemPosicoes = ['Goleiro', 'Zagueiro', 'Ala', 'Volante', 'Atacante'];
 
             async function carregarStatus() {{
                 try {{
@@ -853,34 +857,51 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                     const todosAtletas = await resAtletas.json();
                     const mensalistas = todosAtletas.filter(a => a.mensalista);
 
-                    const idsConfirmados = presencas.filter(p => p.confirmado).map(p => p.atleta_id);
+                    const confirmados = presencas.filter(p => p.confirmado);
                     const idsAusentes = presencas.filter(p => !p.confirmado).map(p => p.atleta_id);
                     const idsSemResposta = mensalistas
-                        .filter(a => !idsConfirmados.includes(a.id) && !idsAusentes.includes(a.id))
+                        .filter(a => !presencas.find(p => p.atleta_id === a.id))
                         .map(a => a.id);
 
-                    const vagas = 30 - idsConfirmados.length;
+                    const vagas = 30 - confirmados.length;
                     document.getElementById('vagas').textContent =
-                        `✅ ${{idsConfirmados.length}} confirmados — ${{vagas}} vagas restantes`;
+                        `✅ ${{confirmados.length}} confirmados — ${{vagas}} vagas restantes`;
 
                     document.getElementById('titulo-confirmados').textContent =
-                        `Confirmados (${{idsConfirmados.length}})`;
+                        `Confirmados (${{confirmados.length}})`;
                     document.getElementById('titulo-ausentes').textContent =
                         `Ausentes (${{idsAusentes.length}})`;
                     document.getElementById('titulo-sem-resposta').textContent =
                         `Sem resposta (${{idsSemResposta.length}})`;
 
-                    document.getElementById('lista-confirmados').innerHTML =
-                        idsConfirmados.length === 0
-                        ? '<div class="vazio">Nenhum confirmado ainda.</div>'
-                        : idsConfirmados.map(id => {{
-                            const a = todosAtletas.find(x => x.id === id);
-                            return `<div class="atleta-item confirmado-item">
-                                <span class="icone">✅</span>
-                                <span class="nome">${{a?.nome ?? '?'}}</span>
-                            </div>`;
-                        }}).join('');
+                    // agrupa confirmados por posição
+                    const grupos = {{}};
+                    for (const p of confirmados) {{
+                        const atleta = todosAtletas.find(a => a.id === p.atleta_id);
+                        const posicao = p.posicao || atleta?.posicao || 'Outro';
+                        if (!grupos[posicao]) grupos[posicao] = [];
+                        grupos[posicao].push(atleta?.nome ?? '?');
+                    }}
 
+                    const listaConf = document.getElementById('lista-confirmados');
+                    if (confirmados.length === 0) {{
+                        listaConf.innerHTML = '<div class="vazio">Nenhum confirmado ainda.</div>';
+                    }} else {{
+                        const todasPosicoes = [...ordemPosicoes, ...Object.keys(grupos).filter(p => !ordemPosicoes.includes(p))];
+                        listaConf.innerHTML = todasPosicoes
+                            .filter(pos => grupos[pos] && grupos[pos].length > 0)
+                            .map(pos => `
+                                <div class="posicao-titulo">${{pos}} (${{grupos[pos].length}})</div>
+                                ${{grupos[pos].map(nome => `
+                                    <div class="atleta-item confirmado-item">
+                                        <span class="icone">✅</span>
+                                        <span class="nome">${{nome}}</span>
+                                    </div>
+                                `).join('')}}
+                            `).join('');
+                    }}
+
+                    // ausentes
                     document.getElementById('lista-ausentes').innerHTML =
                         idsAusentes.length === 0
                         ? '<div class="vazio">Nenhuma ausência confirmada.</div>'
@@ -892,6 +913,7 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                             </div>`;
                         }}).join('');
 
+                    // sem resposta
                     document.getElementById('lista-sem-resposta').innerHTML =
                         idsSemResposta.length === 0
                         ? '<div class="vazio">Todos responderam! 🎉</div>'
@@ -1005,7 +1027,16 @@ def listar_presencas_completo(pelada_id: int, session: Session = Depends(get_ses
     presencas = session.exec(
         select(Presenca).where(Presenca.pelada_id == pelada_id)
     ).all()
-    return [{"atleta_id": p.atleta_id, "confirmado": p.confirmado} for p in presencas]
+    resultado = []
+    for p in presencas:
+        atleta = session.get(Atleta, p.atleta_id)
+        if atleta:
+            resultado.append({
+                "atleta_id": p.atleta_id,
+                "confirmado": p.confirmado,
+                "posicao": atleta.posicao
+            })
+    return resultado
 
 class ImportarStats(SQLModel):
     gols: int
