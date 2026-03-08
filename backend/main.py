@@ -822,10 +822,6 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             <div class="subtitulo">{pelada.local} — {pelada.data}</div>
             <div class="vagas" id="vagas">Carregando...</div>
 
-            <button class="btn-whatsapp" onclick="compartilhar()">
-                📤 Compartilhar lista no WhatsApp
-            </button>
-
             <label>Seu nome</label>
             <select id="atleta">
                 <option value="">— Selecione —</option>
@@ -850,6 +846,10 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             <hr class="divider">
             <div class="secao-titulo" id="titulo-sem-resposta">Sem resposta (0)</div>
             <div id="lista-sem-resposta"><div class="vazio">Carregando...</div></div>
+
+            <button class="btn-whatsapp" onclick="compartilhar()">
+                📤 Exportar lista no WhatsApp
+            </button>
         </div>
 
         <script>
