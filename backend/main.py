@@ -764,7 +764,14 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             .logo {{ text-align: center; font-size: 48px; margin-bottom: 8px; }}
             h1 {{ text-align: center; font-size: 22px; color: #1a1a1a; margin-bottom: 4px; }}
             .subtitulo {{ text-align: center; color: #666; font-size: 14px; margin-bottom: 8px; }}
-            .vagas {{ text-align: center; font-size: 14px; font-weight: 600; color: #1E88E5; margin-bottom: 24px; }}
+            .vagas {{ text-align: center; font-size: 14px; font-weight: 600; color: #1E88E5; margin-bottom: 16px; }}
+            .btn-whatsapp {{
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                width: 100%; padding: 12px; background: #25D366; color: white;
+                border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+                cursor: pointer; margin-bottom: 20px; text-decoration: none;
+            }}
+            .btn-whatsapp:active {{ opacity: 0.8; }}
             label {{ display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; }}
             select {{
                 width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0;
@@ -815,6 +822,10 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             <div class="subtitulo">{pelada.local} — {pelada.data}</div>
             <div class="vagas" id="vagas">Carregando...</div>
 
+            <button class="btn-whatsapp" onclick="compartilhar()">
+                📤 Compartilhar lista no WhatsApp
+            </button>
+
             <label>Seu nome</label>
             <select id="atleta">
                 <option value="">— Selecione —</option>
@@ -846,6 +857,9 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
             const baseUrl = window.location.origin;
             const ordemPosicoes = ['Goleiro', 'Zagueiro', 'Ala', 'Volante', 'Atacante'];
 
+            // armazena dados globais para o compartilhamento
+            let dadosAtuais = {{ confirmados: [], ausentes: [], semResposta: [], grupos: {{}} }};
+
             async function carregarStatus() {{
                 try {{
                     const [resPresencas, resAtletas] = await Promise.all([
@@ -863,6 +877,25 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                         .filter(a => !presencas.find(p => p.atleta_id === a.id))
                         .map(a => a.id);
 
+                    // agrupa confirmados por posição
+                    const grupos = {{}};
+                    for (const p of confirmados) {{
+                        const atleta = todosAtletas.find(a => a.id === p.atleta_id);
+                        const posicao = p.posicao || atleta?.posicao || 'Outro';
+                        if (!grupos[posicao]) grupos[posicao] = [];
+                        grupos[posicao].push(atleta?.nome ?? '?');
+                    }}
+
+                    // salva para compartilhamento
+                    dadosAtuais = {{
+                        confirmados,
+                        ausentes: idsAusentes.map(id => todosAtletas.find(a => a.id === id)?.nome ?? '?'),
+                        semResposta: idsSemResposta.map(id => todosAtletas.find(a => a.id === id)?.nome ?? '?'),
+                        grupos,
+                        local: '{pelada.local}',
+                        data: '{pelada.data}'
+                    }};
+
                     const vagas = 30 - confirmados.length;
                     document.getElementById('vagas').textContent =
                         `✅ ${{confirmados.length}} confirmados — ${{vagas}} vagas restantes`;
@@ -874,15 +907,7 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                     document.getElementById('titulo-sem-resposta').textContent =
                         `Sem resposta (${{idsSemResposta.length}})`;
 
-                    // agrupa confirmados por posição
-                    const grupos = {{}};
-                    for (const p of confirmados) {{
-                        const atleta = todosAtletas.find(a => a.id === p.atleta_id);
-                        const posicao = p.posicao || atleta?.posicao || 'Outro';
-                        if (!grupos[posicao]) grupos[posicao] = [];
-                        grupos[posicao].push(atleta?.nome ?? '?');
-                    }}
-
+                    // confirmados agrupados por posição
                     const listaConf = document.getElementById('lista-confirmados');
                     if (confirmados.length === 0) {{
                         listaConf.innerHTML = '<div class="vazio">Nenhum confirmado ainda.</div>';
@@ -928,6 +953,34 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                 }} catch (e) {{
                     console.error('Erro ao carregar status:', e);
                 }}
+            }}
+
+            function compartilhar() {{
+                const d = dadosAtuais;
+                let texto = `⚽ *PRESENÇAS — ${{d.local}}*\\n`;
+                texto += `📅 ${{d.data}}\\n\\n`;
+
+                texto += `✅ *Confirmados (${{d.confirmados.length}}):*\\n`;
+                const todasPosicoes = [...ordemPosicoes, ...Object.keys(d.grupos).filter(p => !ordemPosicoes.includes(p))];
+                for (const pos of todasPosicoes) {{
+                    if (d.grupos[pos] && d.grupos[pos].length > 0) {{
+                        texto += `\\n_${{pos}}:_\\n`;
+                        d.grupos[pos].forEach(nome => {{ texto += `• ${{nome}}\\n`; }});
+                    }}
+                }}
+
+                if (d.ausentes.length > 0) {{
+                    texto += `\\n❌ *Ausentes (${{d.ausentes.length}}):*\\n`;
+                    d.ausentes.forEach(nome => {{ texto += `• ${{nome}}\\n`; }});
+                }}
+
+                if (d.semResposta.length > 0) {{
+                    texto += `\\n⏳ *Sem resposta (${{d.semResposta.length}}):*\\n`;
+                    d.semResposta.forEach(nome => {{ texto += `• ${{nome}}\\n`; }});
+                }}
+
+                const url = `https://wa.me/?text=${{encodeURIComponent(texto)}}`;
+                window.open(url, '_blank');
             }}
 
             async function responder(confirmar) {{
