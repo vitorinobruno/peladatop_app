@@ -855,9 +855,9 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
         <script>
             const peladaId = {pelada_id};
             const baseUrl = window.location.origin;
-            const ordemPosicoes = ['Goleiro', 'Zagueiro', 'Ala', 'Volante', 'Atacante'];
+            const ordemPosicoes = ['goleiro', 'zagueiro', 'ala', 'volante', 'atacante'];
+            const capitalizar = s => s.charAt(0).toUpperCase() + s.slice(1);
 
-            // armazena dados globais para o compartilhamento
             let dadosAtuais = {{ confirmados: [], ausentes: [], semResposta: [], grupos: {{}} }};
 
             async function carregarStatus() {{
@@ -877,16 +877,33 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                         .filter(a => !presencas.find(p => p.atleta_id === a.id))
                         .map(a => a.id);
 
+                    // contagem separada de goleiros
+                    const confirmadosGoleiros = confirmados.filter(p => {{
+                        const a = todosAtletas.find(x => x.id === p.atleta_id);
+                        return a?.posicao === 'goleiro';
+                    }});
+                    const confirmadosJogadores = confirmados.length - confirmadosGoleiros.length;
+                    const vagas = 30 - confirmadosJogadores;
+
+                    document.getElementById('vagas').textContent =
+                        `✅ ${{confirmadosJogadores}} jogadores + ${{confirmadosGoleiros.length}} goleiro(s) — ${{vagas}} vagas restantes`;
+
+                    document.getElementById('titulo-confirmados').textContent =
+                        `Confirmados (${{confirmados.length}})`;
+                    document.getElementById('titulo-ausentes').textContent =
+                        `Ausentes (${{idsAusentes.length}})`;
+                    document.getElementById('titulo-sem-resposta').textContent =
+                        `Sem resposta (${{idsSemResposta.length}})`;
+
                     // agrupa confirmados por posição
                     const grupos = {{}};
                     for (const p of confirmados) {{
                         const atleta = todosAtletas.find(a => a.id === p.atleta_id);
-                        const posicao = p.posicao || atleta?.posicao || 'Outro';
+                        const posicao = atleta?.posicao || 'outro';
                         if (!grupos[posicao]) grupos[posicao] = [];
                         grupos[posicao].push(atleta?.nome ?? '?');
                     }}
 
-                    // salva para compartilhamento
                     dadosAtuais = {{
                         confirmados,
                         ausentes: idsAusentes.map(id => todosAtletas.find(a => a.id === id)?.nome ?? '?'),
@@ -895,17 +912,6 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                         local: '{pelada.local}',
                         data: '{pelada.data}'
                     }};
-
-                    const vagas = 30 - confirmados.length;
-                    document.getElementById('vagas').textContent =
-                        `✅ ${{confirmados.length}} confirmados — ${{vagas}} vagas restantes`;
-
-                    document.getElementById('titulo-confirmados').textContent =
-                        `Confirmados (${{confirmados.length}})`;
-                    document.getElementById('titulo-ausentes').textContent =
-                        `Ausentes (${{idsAusentes.length}})`;
-                    document.getElementById('titulo-sem-resposta').textContent =
-                        `Sem resposta (${{idsSemResposta.length}})`;
 
                     // confirmados agrupados por posição
                     const listaConf = document.getElementById('lista-confirmados');
@@ -916,7 +922,7 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                         listaConf.innerHTML = todasPosicoes
                             .filter(pos => grupos[pos] && grupos[pos].length > 0)
                             .map(pos => `
-                                <div class="posicao-titulo">${{pos}} (${{grupos[pos].length}})</div>
+                                <div class="posicao-titulo">${{capitalizar(pos)}} (${{grupos[pos].length}})</div>
                                 ${{grupos[pos].map(nome => `
                                     <div class="atleta-item confirmado-item">
                                         <span class="icone">✅</span>
@@ -964,7 +970,7 @@ def pagina_presenca(pelada_id: int, session: Session = Depends(get_session)):
                 const todasPosicoes = [...ordemPosicoes, ...Object.keys(d.grupos).filter(p => !ordemPosicoes.includes(p))];
                 for (const pos of todasPosicoes) {{
                     if (d.grupos[pos] && d.grupos[pos].length > 0) {{
-                        texto += `\\n_${{pos}}:_\\n`;
+                        texto += `\\n_${{capitalizar(pos)}}:_\\n`;
                         d.grupos[pos].forEach(nome => {{ texto += `• ${{nome}}\\n`; }});
                     }}
                 }}
