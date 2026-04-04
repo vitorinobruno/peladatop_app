@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlmodel import SQLModel, Session, create_engine, select, delete
 from models import Atleta, Pelada, PeladaCreate, Presenca, PresencaCreate, Time, TimeAtleta, TimeCreate, Jogo, Partida, EventoPartida
@@ -156,7 +156,8 @@ def listar_presencas(
             "id": a.id,
             "nome": a.nome,
             "posicao": a.posicao,
-            "mensalista": a.mensalista
+            "mensalista": a.mensalista,
+            "nivel": a.nivel,
         }
         for a in atletas
     ]
