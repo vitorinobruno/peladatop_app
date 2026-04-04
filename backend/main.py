@@ -79,14 +79,25 @@ def criar_pelada(
     }
 
 @app.get("/peladas")
-def listar_peladas(session: Session = Depends(get_session)):
-    peladas = session.exec(select(Pelada)).all()
+def listar_peladas(
+    session: Session = Depends(get_session),
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+):
+    query = select(Pelada).order_by(col(Pelada.data).desc())
+    if data_inicio:
+        query = query.where(Pelada.data >= data_inicio)
+    if data_fim:
+        query = query.where(Pelada.data <= data_fim)
+    peladas = session.exec(query).all()
 
     return [
         {
             "id": p.id,
             "data": p.data,
-            "local": p.local
+            "local": p.local,
+            "status": p.status,
+            "campeao": p.campeao,
         }
         for p in peladas
     ]
@@ -164,8 +175,12 @@ def criar_times(
         select(Time).where(Time.pelada_id == pelada_id)
     ).all()
 
-    if jogos_existentes and times_existentes:
-        # ── Atualiza times existentes preservando IDs ──
+    algum_jogo_iniciado = any(
+        j.status in ("em_andamento", "finalizado") for j in jogos_existentes
+    )
+
+    if jogos_existentes and algum_jogo_iniciado:
+        # Algum jogo já foi iniciado: apenas atualiza atletas dos times existentes
         for i, time_existente in enumerate(times_existentes):
             if i >= len(times):
                 break
@@ -174,7 +189,6 @@ def criar_times(
             time_existente.cor = t.cor
             session.add(time_existente)
 
-            # atualiza atletas do time
             session.exec(
                 delete(TimeAtleta).where(TimeAtleta.time_id == time_existente.id)
             )
@@ -187,7 +201,14 @@ def criar_times(
         session.commit()
         return {"msg": "Times atualizados com sucesso"}
 
-    # ── Sem jogos: recria tudo normalmente ──
+    if jogos_existentes:
+        # Jogos gerados mas nenhum iniciado: apaga jogos e times, recria tudo
+        for j in jogos_existentes:
+            session.exec(delete(Partida).where(Partida.jogo_id == j.id))
+            session.delete(j)
+        session.commit()
+
+    # Sem jogos (ou após limpeza): recria times do zero
     for t in times_existentes:
         session.exec(
             delete(TimeAtleta).where(TimeAtleta.time_id == t.id)
