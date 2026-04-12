@@ -447,6 +447,16 @@ def obter_partida(
         select(Atleta).join(TimeAtleta).where(TimeAtleta.time_id == time_b.id)
     ).all()
 
+    goleiros = session.exec(
+        select(Atleta)
+        .join(Presenca)
+        .where(
+            Presenca.pelada_id == jogo.pelada_id,
+            Presenca.confirmado == True,
+            Atleta.posicao == "goleiro"
+        )
+    ).all()
+
     return {
         "id": partida.id,
         "tempo_minutos": partida.tempo_minutos,
@@ -466,6 +476,7 @@ def obter_partida(
             "cor": time_b.cor,
             "atletas": [{"id": a.id, "nome": a.nome} for a in atletas_b],
         },
+        "goleiros": [{"id": a.id, "nome": a.nome} for a in goleiros],
     }
 
 @app.post("/partidas/{partida_id}/finalizar")
