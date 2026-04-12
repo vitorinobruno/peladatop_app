@@ -128,11 +128,17 @@ def salvar_presencas(
     session: Session = Depends(get_session)
 ):
     for atleta_id in payload.atletas_ids:
-        p = Presenca(
-            pelada_id=pelada_id,
-            atleta_id=atleta_id
-        )
-        session.add(p)
+        existente = session.exec(
+            select(Presenca).where(
+                Presenca.pelada_id == pelada_id,
+                Presenca.atleta_id == atleta_id
+            )
+        ).first()
+        if existente:
+            existente.confirmado = True
+            session.add(existente)
+        else:
+            session.add(Presenca(pelada_id=pelada_id, atleta_id=atleta_id))
 
     session.commit()
     return {"msg": "Presenças registradas"}
@@ -425,6 +431,26 @@ def registrar_gol(
 
     return {"ok": True}
 
+@app.put("/partidas/{partida_id}/gol/{evento_id}")
+def editar_gol(
+    partida_id: int,
+    evento_id: int,
+    atleta_gol_id: int,
+    atleta_assistencia_id: int | None = None,
+    session: Session = Depends(get_session)
+):
+    evento = session.get(EventoPartida, evento_id)
+    if not evento or evento.partida_id != partida_id:
+        raise HTTPException(404, "Evento não encontrado")
+
+    evento.atleta_gol_id = atleta_gol_id
+    evento.atleta_assistencia_id = atleta_assistencia_id
+
+    session.add(evento)
+    session.commit()
+
+    return {"ok": True}
+
 @app.get("/partidas/{partida_id}")
 def obter_partida(
     partida_id: int,
@@ -457,6 +483,25 @@ def obter_partida(
         )
     ).all()
 
+    eventos = session.exec(
+        select(EventoPartida)
+        .where(EventoPartida.partida_id == partida.id)
+        .order_by(EventoPartida.instante_segundos)
+    ).all()
+
+    todos_atletas = {a.id: a.nome for a in [*atletas_a, *atletas_b, *goleiros]}
+
+    def formatar_evento(e):
+        return {
+            "id": e.id,
+            "instante_segundos": e.instante_segundos,
+            "time_id": e.time_id,
+            "atleta_gol_id": e.atleta_gol_id,
+            "atleta_gol_nome": todos_atletas.get(e.atleta_gol_id, "?") if e.atleta_gol_id else None,
+            "atleta_assistencia_id": e.atleta_assistencia_id,
+            "atleta_assistencia_nome": todos_atletas.get(e.atleta_assistencia_id, "?") if e.atleta_assistencia_id else None,
+        }
+
     return {
         "id": partida.id,
         "tempo_minutos": partida.tempo_minutos,
@@ -477,6 +522,7 @@ def obter_partida(
             "atletas": [{"id": a.id, "nome": a.nome} for a in atletas_b],
         },
         "goleiros": [{"id": a.id, "nome": a.nome} for a in goleiros],
+        "eventos": [formatar_evento(e) for e in eventos],
     }
 
 @app.post("/partidas/{partida_id}/finalizar")
