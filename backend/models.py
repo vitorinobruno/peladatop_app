@@ -16,6 +16,7 @@ class Pelada(SQLModel, table=True):
     local: str
     status: str = "planejada"
     campeao: Optional[str] = None
+    deletada: bool = False
 
 class PeladaCreate(SQLModel):
     data: date

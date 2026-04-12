@@ -84,7 +84,7 @@ def listar_peladas(
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
 ):
-    query = select(Pelada).order_by(col(Pelada.data).desc())
+    query = select(Pelada).where(Pelada.deletada == False).order_by(col(Pelada.data).desc())
     if data_inicio:
         query = query.where(Pelada.data >= data_inicio)
     if data_fim:
@@ -112,8 +112,9 @@ def excluir_pelada(
     if not pelada:
         raise HTTPException(status_code=404, detail="Pelada não encontrada")
 
-    session.delete(pelada)
+    pelada.deletada = True
     try:
+        session.add(pelada)
         session.commit()
     except Exception as e:
         session.rollback()
@@ -779,11 +780,12 @@ def ranking_titulos(session: Session = Depends(get_session)):
     return ranking
 
 @app.get("/estatisticas/pontos-ano")
-def pontos_no_ano(session: Session = Depends(get_session)):
+def pontos_no_ano(ano: Optional[int] = None, session: Session = Depends(get_session)):
 
-    peladas = session.exec(
-        select(Pelada).where(Pelada.status == "finalizada")
-    ).all()
+    query = select(Pelada).where(Pelada.status == "finalizada")
+    if ano:
+        query = query.where(col(Pelada.data) >= date(ano, 1, 1)).where(col(Pelada.data) <= date(ano, 12, 31))
+    peladas = session.exec(query).all()
 
     tabela = {}
 
