@@ -156,6 +156,7 @@ def listar_presencas(
             Presenca.pelada_id == pelada_id,
             Presenca.confirmado == True
         )
+        .distinct()
     ).all()
 
     return [
