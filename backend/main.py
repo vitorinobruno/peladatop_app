@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlmodel import SQLModel, Session, create_engine, select, delete
 from models import Atleta, Pelada, PeladaCreate, Presenca, PresencaCreate, Time, TimeAtleta, TimeCreate, Jogo, Partida, EventoPartida
 from datetime import date, datetime
@@ -7,6 +7,8 @@ from database import get_session, engine
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import col
+import os
+from groq import Groq
 
 app = FastAPI()
 
@@ -1231,3 +1233,112 @@ def importar_stats(
 
     session.commit()
     return {"msg": f"Stats importadas: {dados.gols} gols, {dados.assistencias} assistências"}
+
+
+# ─────────────────────────────────────────
+# Resenha gerada por IA
+# ─────────────────────────────────────────
+
+class ResenhaRequest(SQLModel):
+    detalhes_extras: Optional[str] = None
+
+@app.post("/peladas/{pelada_id}/resenha", response_class=PlainTextResponse)
+def gerar_resenha(
+    pelada_id: int,
+    body: ResenhaRequest = ResenhaRequest(),
+    session: Session = Depends(get_session)
+):
+    pelada = session.get(Pelada, pelada_id)
+    if not pelada:
+        raise HTTPException(404, "Pelada não encontrada")
+
+    jogos = session.exec(
+        select(Jogo).where(Jogo.pelada_id == pelada_id)
+    ).all()
+
+    if not jogos:
+        raise HTTPException(400, "Nenhum jogo encontrado para esta pelada")
+
+    atletas_map = {a.id: a.nome for a in session.exec(select(Atleta)).all()}
+    times_map = {t.id: t.nome for t in session.exec(
+        select(Time).where(Time.pelada_id == pelada_id)
+    ).all()}
+
+    jogos_desc = []
+    for jogo in sorted(jogos, key=lambda j: j.id):
+        nome_a = times_map.get(jogo.time_a_id, f"Time {jogo.time_a_id}")
+        nome_b = times_map.get(jogo.time_b_id, f"Time {jogo.time_b_id}")
+
+        partidas = session.exec(
+            select(Partida).where(Partida.jogo_id == jogo.id)
+        ).all()
+
+        eventos_jogo = []
+        for partida in sorted(partidas, key=lambda p: p.id):
+            eventos = session.exec(
+                select(EventoPartida)
+                .where(EventoPartida.partida_id == partida.id)
+                .order_by(EventoPartida.instante_segundos)
+            ).all()
+
+            for ev in eventos:
+                minuto = ev.instante_segundos // 60
+                segundo = ev.instante_segundos % 60
+                timestamp = f"{minuto}'{segundo:02d}\""
+                goleador = atletas_map.get(ev.atleta_gol_id) if ev.atleta_gol_id else None
+                assistente = atletas_map.get(ev.atleta_assistencia_id) if ev.atleta_assistencia_id else None
+                time_nome = times_map.get(ev.time_id, "?")
+
+                desc = f"  - {timestamp}: Gol de {goleador} ({time_nome})" if goleador else f"  - {timestamp}: Gol ({time_nome})"
+                if assistente:
+                    desc += f", assistência de {assistente}"
+                eventos_jogo.append(desc)
+
+        placar = f"{jogo.gols_time_a} x {jogo.gols_time_b}"
+        jogo_texto = (
+            f"Jogo: {nome_a} {placar} {nome_b} [status: {jogo.status}]\n"
+            + ("\n".join(eventos_jogo) if eventos_jogo else "  (sem eventos registrados)")
+        )
+        jogos_desc.append(jogo_texto)
+
+    jogos_str = "\n\n".join(jogos_desc)
+
+    prompt = f"""Você é um narrador esportivo brasileiro bem humorado. Gere uma resenha completa da pelada abaixo em português.
+
+Dados da pelada:
+- Local: {pelada.local}
+- Data: {pelada.data}
+- Campeão: {pelada.campeao or 'não definido'}
+
+Jogos (em ordem cronológica):
+{jogos_str}
+"""
+
+    if body.detalhes_extras:
+        prompt += f"\nDetalhes extras fornecidos pelos participantes:\n{body.detalhes_extras}\n"
+
+    prompt += """
+Instruções:
+- Comece a resenha com a data da pelada em destaque (formato dia/mês/ano)
+- Escreva em estilo esportivo, animado e bem humorado, como uma crônica de jornal esportivo
+- Descreva cada jogo cronologicamente com gols e momentos marcantes
+- Mencione goleadores e assistentes pelo nome de forma natural, incluindo o minuto e segundo exato de cada gol (ex: "aos 12'34\"")
+- Ao final de cada jogo, destaque o placar
+- Escreva um resumo geral no final com o campeão e os destaques
+- Se houver detalhes extras, incorpore-os naturalmente no texto
+- Use linguagem descontraída, como relato entre amigos
+"""
+
+    groq_key = os.environ.get("GROQ_API_KEY")
+    if not groq_key:
+        raise HTTPException(500, "GROQ_API_KEY não configurada")
+
+    client = Groq(api_key=groq_key)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8,
+        max_tokens=2048,
+    )
+
+    return response.choices[0].message.content
