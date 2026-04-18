@@ -1321,7 +1321,10 @@ Jogos (em ordem cronológica):
 Instruções:
 - Comece a resenha com a data da pelada em destaque (formato dia/mês/ano)
 - Escreva em estilo esportivo, animado e bem humorado, como uma crônica de jornal esportivo
-- Descreva cada jogo cronologicamente com gols e momentos marcantes
+- Os jogos estão listados em ordem cronológica (do primeiro ao último). Respeite EXATAMENTE essa ordem ao narrar — o primeiro jogo listado foi o primeiro a acontecer, o último foi o final
+- Ao referenciar jogos (ex: "segundo jogo", "última partida"), use sempre a posição correta na ordem cronológica fornecida
+- Descreva cada jogo na sequência em que aconteceu, com gols e momentos marcantes
+- Jogos sem gols (0 a 0) devem ser mencionados — narre-os com criatividade, destacando a disputa equilibrada ou a atuação dos goleiros
 - Mencione goleadores e assistentes pelo nome de forma natural, incluindo o minuto e segundo exato de cada gol (ex: "aos 12'34\"")
 - Ao final de cada jogo, destaque o placar
 - Escreva um resumo geral no final com o campeão e os destaques
