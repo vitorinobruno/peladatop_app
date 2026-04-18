@@ -1264,14 +1264,28 @@ def gerar_resenha(
         select(Time).where(Time.pelada_id == pelada_id)
     ).all()}
 
+    # Busca todas as partidas da pelada para ordenar jogos pela partida_id
+    todas_partidas = session.exec(
+        select(Partida).where(
+            col(Partida.jogo_id).in_([j.id for j in jogos])
+        )
+    ).all()
+
+    # Mapeia jogo_id → menor partida_id (ordem real de jogo)
+    partida_min_por_jogo = {}
+    for p in todas_partidas:
+        atual = partida_min_por_jogo.get(p.jogo_id, float('inf'))
+        partida_min_por_jogo[p.jogo_id] = min(atual, p.id)
+
+    # Jogos sem partida ficam no final
+    jogos_ordenados = sorted(jogos, key=lambda j: partida_min_por_jogo.get(j.id, float('inf')))
+
     jogos_desc = []
-    for jogo in sorted(jogos, key=lambda j: j.id):
+    for idx, jogo in enumerate(jogos_ordenados, start=1):
         nome_a = times_map.get(jogo.time_a_id, f"Time {jogo.time_a_id}")
         nome_b = times_map.get(jogo.time_b_id, f"Time {jogo.time_b_id}")
 
-        partidas = session.exec(
-            select(Partida).where(Partida.jogo_id == jogo.id)
-        ).all()
+        partidas = [p for p in todas_partidas if p.jogo_id == jogo.id]
 
         eventos_jogo = []
         for partida in sorted(partidas, key=lambda p: p.id):
@@ -1296,8 +1310,8 @@ def gerar_resenha(
 
         placar = f"{jogo.gols_time_a} x {jogo.gols_time_b}"
         jogo_texto = (
-            f"Jogo: {nome_a} {placar} {nome_b} [status: {jogo.status}]\n"
-            + ("\n".join(eventos_jogo) if eventos_jogo else "  (sem eventos registrados)")
+            f"Jogo {idx}: {nome_a} {placar} {nome_b} [status: {jogo.status}]\n"
+            + ("\n".join(eventos_jogo) if eventos_jogo else "  (sem gols registrados — jogo terminou 0 x 0)")
         )
         jogos_desc.append(jogo_texto)
 
