@@ -400,7 +400,7 @@ def criar_ou_obter_partida(
 def registrar_gol(
     partida_id: int,
     time_id: int,
-    atleta_gol_id: int,
+    atleta_gol_id: int | None = None,
     atleta_assistencia_id: int | None = None,
     instante_segundos: int = 0,
     session: Session = Depends(get_session)
@@ -1303,7 +1303,7 @@ def gerar_resenha(
                 assistente = atletas_map.get(ev.atleta_assistencia_id) if ev.atleta_assistencia_id else None
                 time_nome = times_map.get(ev.time_id, "?")
 
-                desc = f"  - {timestamp}: Gol de {goleador} ({time_nome})" if goleador else f"  - {timestamp}: Gol ({time_nome})"
+                desc = f"  - {timestamp}: Gol de {goleador} ({time_nome})" if goleador else f"  - {timestamp}: Gol contra ({time_nome})"
                 if assistente:
                     desc += f", assistência de {assistente}"
                 eventos_jogo.append(desc)
