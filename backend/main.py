@@ -655,6 +655,24 @@ def finalizar_pelada(
         raise HTTPException(400, "Nenhum jogo finalizado")
 
     campeao = classificacao[0]
+
+    # --------------------------------------------------
+    # Verifica empate no topo da tabela
+    # --------------------------------------------------
+    empate_no_topo = len(classificacao) > 1 and (
+        campeao["pontos"] == classificacao[1]["pontos"] and
+        (campeao["gols_pro"] - campeao["gols_contra"]) == (classificacao[1]["gols_pro"] - classificacao[1]["gols_contra"]) and
+        campeao["gols_pro"] == classificacao[1]["gols_pro"]
+    )
+
+    pelada.status = "finalizada"
+
+    if empate_no_topo:
+        pelada.campeao = None
+        session.add(pelada)
+        session.commit()
+        return {"msg": "Pelada finalizada — empate, sem campeão", "campeao": None}
+
     time_campeao_id = campeao["time_id"]
     nome_campeao = campeao["nome"]
 
@@ -674,8 +692,7 @@ def finalizar_pelada(
     # --------------------------------------------------
     # Salva campeão e finaliza pelada
     # --------------------------------------------------
-    pelada.status = "finalizada"
-    pelada.campeao = nome_campeao   # ⭐ AGORA PERSISTE
+    pelada.campeao = nome_campeao
     session.add(pelada)
 
     session.commit()
