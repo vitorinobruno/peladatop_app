@@ -59,6 +59,7 @@ class Jogo(SQLModel, table=True):
     gols_time_b: int = 0
 
     tempo_minutos: int
+    pausavel: bool = False
 
     status: str = "nao_iniciado"
     # valores: nao_iniciado | em_andamento | finalizado

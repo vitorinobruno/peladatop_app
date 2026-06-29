@@ -272,6 +272,7 @@ def listar_times(
 def criar_jogos(
     pelada_id: int,
     tempo_minutos: int,
+    pausavel: bool = False,
     session: Session = Depends(get_session)
 ):
     jogos_existentes = session.exec(
@@ -293,7 +294,8 @@ def criar_jogos(
                 pelada_id=pelada_id,
                 time_a_id=times[0].id,
                 time_b_id=times[1].id,
-                tempo_minutos=tempo_minutos
+                tempo_minutos=tempo_minutos,
+                pausavel=pausavel
             )
         )
 
@@ -306,7 +308,8 @@ def criar_jogos(
                             pelada_id=pelada_id,
                             time_a_id=times[i].id,
                             time_b_id=times[j].id,
-                            tempo_minutos=tempo_minutos
+                            tempo_minutos=tempo_minutos,
+                            pausavel=pausavel
                         )
                     )
 
@@ -338,7 +341,8 @@ def listar_jogos(
             "gols_time_b": j.gols_time_b,
             "time_a_id": j.time_a_id,
             "time_b_id": j.time_b_id,
-            "tempo_minutos": j.tempo_minutos,  
+            "tempo_minutos": j.tempo_minutos,
+            "pausavel": j.pausavel,
             "nome_time_a": time_a.nome if time_a else None,
             "nome_time_b": time_b.nome if time_b else None
         })
@@ -509,6 +513,7 @@ def obter_partida(
     return {
         "id": partida.id,
         "tempo_minutos": partida.tempo_minutos,
+        "pausavel": jogo.pausavel,
         "iniciada_em": partida.iniciada_em,
         "placar_a": partida.placar_a,
         "placar_b": partida.placar_b,
