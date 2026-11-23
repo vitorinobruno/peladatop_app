@@ -290,6 +290,10 @@ path_provider: ^2.1.0  # Diretório temporário para salvar PNG
 
 ---
 
+## Planejamento 2027
+
+Especificação em rascunho para unificar Segunda, Quinta e Sábado em 1 serviço + 1 app (schema PostgreSQL por pelada): ver `ESPEC_2027_MULTI_PELADA.md`. Nada implementado ainda.
+
 ## Pontos de Atenção
 
 - CORS configurado com `allow_origins=["*"]` — aceitável para o contexto atual
