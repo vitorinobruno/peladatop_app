@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import col
 import os
 from groq import Groq
+import torneio as trn
 
 app = FastAPI()
 
@@ -66,10 +67,13 @@ def criar_pelada(
     pelada_in: PeladaCreate,
     session: Session = Depends(get_session)
 ):
+    if pelada_in.tipo not in ("normal", "torneio"):
+        raise HTTPException(400, "Tipo de pelada inválido")
     pelada = Pelada(
         data=pelada_in.data,
         local=pelada_in.local,
-        status="planejada"
+        status="planejada",
+        tipo=pelada_in.tipo,
     )
     session.add(pelada)
     session.commit()
@@ -77,7 +81,8 @@ def criar_pelada(
     return {
         "id": pelada.id,
         "data": pelada.data,
-        "local": pelada.local
+        "local": pelada.local,
+        "tipo": pelada.tipo,
     }
 
 @app.get("/peladas")
@@ -100,6 +105,7 @@ def listar_peladas(
             "local": p.local,
             "status": p.status,
             "campeao": p.campeao,
+            "tipo": p.tipo,
         }
         for p in peladas
     ]
@@ -178,6 +184,14 @@ def criar_times(
     times: list[TimeCreate],
     session: Session = Depends(get_session)
 ):
+    pelada = session.get(Pelada, pelada_id)
+    eh_torneio = pelada is not None and pelada.tipo == "torneio"
+
+    if eh_torneio and sorted(t.cor for t in times) != sorted(trn.CORES_TORNEIO):
+        raise HTTPException(
+            400, "Torneio exige 4 times, um de cada cor: Branco, Verde, Laranja e Azul"
+        )
+
     jogos_existentes = session.exec(
         select(Jogo).where(Jogo.pelada_id == pelada_id)
     ).all()
@@ -185,6 +199,12 @@ def criar_times(
     times_existentes = session.exec(
         select(Time).where(Time.pelada_id == pelada_id)
     ).all()
+
+    if eh_torneio:
+        # A tabela do torneio é por cor: pareia times existentes e novos pela cor
+        ordem_cor = {c: i for i, c in enumerate(trn.CORES_TORNEIO)}
+        times = sorted(times, key=lambda t: ordem_cor.get(t.cor, 99))
+        times_existentes = sorted(times_existentes, key=lambda t: ordem_cor.get(t.cor, 99))
 
     algum_jogo_iniciado = any(
         j.status in ("em_andamento", "finalizado") for j in jogos_existentes
@@ -288,6 +308,27 @@ def criar_jogos(
 
     jogos = []
 
+    pelada = session.get(Pelada, pelada_id)
+    if pelada and pelada.tipo == "torneio":
+        por_cor = {t.cor: t for t in times}
+        if len(times) != 4 or sorted(por_cor) != sorted(trn.CORES_TORNEIO):
+            raise HTTPException(
+                400, "Torneio exige 4 times salvos, um de cada cor: Branco, Verde, Laranja e Azul"
+            )
+        for ordem, (cor_a, cor_b) in enumerate(trn.TABELA_GRUPOS, start=1):
+            jogos.append(Jogo(
+                pelada_id=pelada_id,
+                time_a_id=por_cor[cor_a].id,
+                time_b_id=por_cor[cor_b].id,
+                tempo_minutos=tempo_minutos,
+                pausavel=pausavel,
+                fase="grupos",
+                ordem=ordem,
+            ))
+        session.add_all(jogos)
+        session.commit()
+        return jogos
+
     if len(times) == 2:
         jogos.append(
             Jogo(
@@ -326,6 +367,7 @@ def listar_jogos(
     jogos = session.exec(
         select(Jogo).where(Jogo.pelada_id == pelada_id)
     ).all()
+    jogos = sorted(jogos, key=lambda j: (j.ordem is None, j.ordem or 0, j.id))
 
     resultado = []
 
@@ -344,7 +386,13 @@ def listar_jogos(
             "tempo_minutos": j.tempo_minutos,
             "pausavel": j.pausavel,
             "nome_time_a": time_a.nome if time_a else None,
-            "nome_time_b": time_b.nome if time_b else None
+            "nome_time_b": time_b.nome if time_b else None,
+            "cor_time_a": time_a.cor if time_a else None,
+            "cor_time_b": time_b.cor if time_b else None,
+            "fase": j.fase,
+            "ordem": j.ordem,
+            "penaltis_a": j.penaltis_a,
+            "penaltis_b": j.penaltis_b,
         })
 
     return resultado
@@ -437,6 +485,10 @@ def registrar_gol(
     session.add(jogo)  # ← adiciona isso
     session.commit()
 
+    # Gol adicionado depois de um jogo da 1ª fase finalizado pode mudar a classificação
+    if jogo.status == "finalizado" and trn.eh_grupos(jogo):
+        _sincronizar_segunda_fase(jogo.pelada_id, session)
+
     return {"ok": True}
 
 @app.put("/partidas/{partida_id}/gol/{evento_id}")
@@ -514,6 +566,11 @@ def obter_partida(
         "id": partida.id,
         "tempo_minutos": partida.tempo_minutos,
         "pausavel": jogo.pausavel,
+        "jogo_id": jogo.id,
+        "fase": jogo.fase,
+        "ordem": jogo.ordem,
+        "penaltis_a": jogo.penaltis_a,
+        "penaltis_b": jogo.penaltis_b,
         "iniciada_em": partida.iniciada_em,
         "placar_a": partida.placar_a,
         "placar_b": partida.placar_b,
@@ -537,6 +594,8 @@ def obter_partida(
 @app.post("/partidas/{partida_id}/finalizar")
 def finalizar_partida(
     partida_id: int,
+    penaltis_a: Optional[int] = None,
+    penaltis_b: Optional[int] = None,
     session: Session = Depends(get_session)
 ):
     partida = session.get(Partida, partida_id)
@@ -547,6 +606,19 @@ def finalizar_partida(
         return {"msg": "Partida já finalizada"}
 
     jogo = session.get(Jogo, partida.jogo_id)
+
+    # Mata-mata do torneio empatado → exige placar dos pênaltis
+    if trn.eh_mata_mata(jogo):
+        if partida.placar_a == partida.placar_b:
+            if penaltis_a is None or penaltis_b is None:
+                raise HTTPException(400, "Jogo empatado: informe o placar dos pênaltis")
+            if penaltis_a == penaltis_b:
+                raise HTTPException(400, "Placar dos pênaltis não pode terminar empatado")
+            jogo.penaltis_a = penaltis_a
+            jogo.penaltis_b = penaltis_b
+        else:
+            jogo.penaltis_a = None
+            jogo.penaltis_b = None
 
     # copia placar para o jogo
     jogo.gols_time_a = partida.placar_a
@@ -562,7 +634,34 @@ def finalizar_partida(
     session.add(partida)
     session.commit()
 
+    if trn.eh_grupos(jogo):
+        _sincronizar_segunda_fase(jogo.pelada_id, session)
+
     return {"msg": "Partida finalizada com sucesso"}
+
+
+@app.put("/jogos/{jogo_id}/penaltis")
+def definir_penaltis(
+    jogo_id: int,
+    penaltis_a: int,
+    penaltis_b: int,
+    session: Session = Depends(get_session)
+):
+    """Define/corrige pênaltis de um jogo de mata-mata já finalizado e empatado."""
+    jogo = session.get(Jogo, jogo_id)
+    if not jogo:
+        raise HTTPException(404, "Jogo não encontrado")
+    if not trn.eh_mata_mata(jogo):
+        raise HTTPException(400, "Pênaltis só existem na final e na disputa de 3º lugar")
+    if jogo.gols_time_a != jogo.gols_time_b:
+        raise HTTPException(400, "Jogo não terminou empatado")
+    if penaltis_a == penaltis_b:
+        raise HTTPException(400, "Placar dos pênaltis não pode terminar empatado")
+    jogo.penaltis_a = penaltis_a
+    jogo.penaltis_b = penaltis_b
+    session.add(jogo)
+    session.commit()
+    return {"ok": True}
 
 @app.get("/peladas/{pelada_id}/classificacao")
 def classificacao_pelada(
@@ -576,6 +675,10 @@ def classificacao_pelada(
     jogos = session.exec(
         select(Jogo).where(Jogo.pelada_id == pelada_id)
     ).all()
+
+    pelada = session.get(Pelada, pelada_id)
+    if pelada and pelada.tipo == "torneio":
+        return _classificacao_grupos_torneio(times, jogos)["tabela"]
 
     tabela = {
         t.id: {
@@ -652,6 +755,26 @@ def finalizar_pelada(
         }
 
     # --------------------------------------------------
+    # Torneio: campeão = vencedor da final (inclui pênaltis).
+    # Não incrementa títulos nem entra no ranking anual de times.
+    # --------------------------------------------------
+    if pelada.tipo == "torneio":
+        final = session.exec(
+            select(Jogo).where(Jogo.pelada_id == pelada_id, Jogo.fase == "final")
+        ).first()
+        if not final or final.status != "finalizado":
+            raise HTTPException(400, "A final ainda não foi disputada")
+        campeao_id = trn.vencedor(final)
+        if campeao_id is None:
+            raise HTTPException(400, "Final empatada sem placar de pênaltis")
+        time_campeao = session.get(Time, campeao_id)
+        pelada.status = "finalizada"
+        pelada.campeao = time_campeao.nome
+        session.add(pelada)
+        session.commit()
+        return {"msg": "Torneio finalizado com sucesso", "campeao": pelada.campeao}
+
+    # --------------------------------------------------
     # Calcula classificação
     # --------------------------------------------------
     classificacao = classificacao_pelada(pelada_id, session)
@@ -706,6 +829,175 @@ def finalizar_pelada(
         "msg": "Pelada finalizada com sucesso",
         "campeao": nome_campeao
     }
+
+# ==================================================
+# TORNEIO DE FIM DE ANO
+# ==================================================
+
+def _classificacao_grupos_torneio(times, jogos):
+    """Classificação da 1ª fase. Se a 2ª fase já existe (ex: definida por sorteio
+    manual), a ordem da tabela respeita quem foi para a final."""
+    resultado = trn.classificar_grupos(times, jogos)
+    final = next((j for j in jogos if j.fase == "final"), None)
+    if final and resultado["sorteio_necessario"]:
+        finalistas = {final.time_a_id, final.time_b_id}
+        tabela = sorted(
+            resultado["tabela"],
+            key=lambda r: (r["time_id"] not in finalistas, r["posicao"]),
+        )
+        for i, r in enumerate(tabela, start=1):
+            r["posicao"] = i
+        resultado["tabela"] = tabela
+        resultado["sorteio_resolvido"] = True
+    return resultado
+
+
+def _criar_ou_atualizar_mata_mata(pelada_id: int, ordem: list[int], session: Session):
+    """ordem = [1º, 2º, 3º, 4º] da 1ª fase → cria/atualiza jogos 07 e 08."""
+    jogos = session.exec(select(Jogo).where(Jogo.pelada_id == pelada_id)).all()
+    mata = {j.fase: j for j in jogos if trn.eh_mata_mata(j)}
+    if any(j.status != "nao_iniciado" for j in mata.values()):
+        raise HTTPException(400, "A 2ª fase já começou e não pode mais ser alterada")
+
+    ref = next((j for j in jogos if trn.eh_grupos(j)), None)
+    tempo = ref.tempo_minutos if ref else trn.TEMPO_PADRAO_MINUTOS
+    pausavel = ref.pausavel if ref else True
+
+    confrontos = {
+        "terceiro": (trn.ORDEM_TERCEIRO, ordem[2], ordem[3]),
+        "final": (trn.ORDEM_FINAL, ordem[0], ordem[1]),
+    }
+    for fase, (num, time_a, time_b) in confrontos.items():
+        jogo = mata.get(fase) or Jogo(
+            pelada_id=pelada_id, time_a_id=time_a, time_b_id=time_b,
+            tempo_minutos=tempo, pausavel=pausavel, fase=fase, ordem=num,
+        )
+        jogo.time_a_id = time_a
+        jogo.time_b_id = time_b
+        session.add(jogo)
+    session.commit()
+
+
+def _sincronizar_segunda_fase(pelada_id: int, session: Session):
+    """Gera (ou recalcula, se ainda não começou) a 2ª fase quando os 6 jogos
+    da 1ª fase estão finalizados. Se houver empate que dependa de sorteio,
+    aguarda a escolha manual (POST /peladas/{id}/torneio/segunda-fase)."""
+    pelada = session.get(Pelada, pelada_id)
+    if not pelada or pelada.tipo != "torneio":
+        return
+
+    jogos = session.exec(select(Jogo).where(Jogo.pelada_id == pelada_id)).all()
+    grupos = [j for j in jogos if trn.eh_grupos(j)]
+    mata = [j for j in jogos if trn.eh_mata_mata(j)]
+
+    if len(grupos) < len(trn.TABELA_GRUPOS) or any(j.status != "finalizado" for j in grupos):
+        return
+    if any(j.status != "nao_iniciado" for j in mata):
+        return  # 2ª fase em andamento: não mexe
+
+    times = session.exec(select(Time).where(Time.pelada_id == pelada_id)).all()
+    cls = trn.classificar_grupos(times, jogos)
+
+    if cls["sorteio_necessario"]:
+        # Mantém escolha manual existente se ainda for compatível com a tabela
+        final = next((j for j in mata if j.fase == "final"), None)
+        if final:
+            finalistas = {final.time_a_id, final.time_b_id}
+            empatados = set(cls["empatados"])
+            acima = {r["time_id"] for r in cls["tabela"]
+                     if r["time_id"] not in empatados and r["posicao"] <= 2}
+            if acima <= finalistas <= (acima | empatados):
+                return
+            for j in mata:
+                session.delete(j)
+            session.commit()
+        return
+
+    _criar_ou_atualizar_mata_mata(pelada_id, [r["time_id"] for r in cls["tabela"]], session)
+
+
+@app.get("/peladas/{pelada_id}/torneio")
+def resumo_torneio(pelada_id: int, session: Session = Depends(get_session)):
+    pelada = session.get(Pelada, pelada_id)
+    if not pelada or pelada.tipo != "torneio":
+        raise HTTPException(404, "Torneio não encontrado")
+
+    times = session.exec(select(Time).where(Time.pelada_id == pelada_id)).all()
+    jogos = session.exec(select(Jogo).where(Jogo.pelada_id == pelada_id)).all()
+    times_map = {t.id: t for t in times}
+
+    grupos = _classificacao_grupos_torneio(times, jogos)
+    grupos_finalizados = (
+        sum(1 for j in jogos if trn.eh_grupos(j) and j.status == "finalizado")
+        == len(trn.TABELA_GRUPOS)
+    )
+    segunda_fase_gerada = any(trn.eh_mata_mata(j) for j in jogos)
+
+    def time_info(tid, posicao):
+        if tid is None:
+            return None
+        t = times_map.get(tid)
+        return {"posicao": posicao, "time_id": tid,
+                "nome": t.nome if t else "?", "cor": t.cor if t else None}
+
+    final_ids = trn.classificacao_final(jogos)
+
+    return {
+        "grupos": grupos,
+        "grupos_finalizados": grupos_finalizados,
+        "segunda_fase_gerada": segunda_fase_gerada,
+        "aguardando_sorteio": grupos_finalizados and grupos["sorteio_necessario"] and not segunda_fase_gerada,
+        "classificacao_final": [time_info(tid, i) for i, tid in enumerate(final_ids, start=1)],
+    }
+
+
+class SegundaFaseRequest(SQLModel):
+    finalistas: list[int]  # time_ids escolhidos (após sorteio) entre os empatados
+
+
+@app.post("/peladas/{pelada_id}/torneio/segunda-fase")
+def definir_segunda_fase(
+    pelada_id: int,
+    body: SegundaFaseRequest,
+    session: Session = Depends(get_session)
+):
+    """Resolve o critério iv (sorteio): informa quem dos empatados vai para a final."""
+    pelada = session.get(Pelada, pelada_id)
+    if not pelada or pelada.tipo != "torneio":
+        raise HTTPException(404, "Torneio não encontrado")
+
+    times = session.exec(select(Time).where(Time.pelada_id == pelada_id)).all()
+    jogos = session.exec(select(Jogo).where(Jogo.pelada_id == pelada_id)).all()
+    grupos = [j for j in jogos if trn.eh_grupos(j)]
+    if any(j.status != "finalizado" for j in grupos):
+        raise HTTPException(400, "A 1ª fase ainda não terminou")
+
+    cls = trn.classificar_grupos(times, jogos)
+    if not cls["sorteio_necessario"]:
+        raise HTTPException(400, "Não há empate a ser resolvido por sorteio")
+
+    escolhidos = list(dict.fromkeys(body.finalistas))
+    empatados = cls["empatados"]
+    if len(escolhidos) != cls["vagas_final"] or not set(escolhidos) <= set(empatados):
+        raise HTTPException(
+            400, f"Escolha exatamente {cls['vagas_final']} time(s) entre os empatados"
+        )
+
+    restantes = [t for t in empatados if t not in escolhidos]
+    ordem = []
+    bloco_inserido = False
+    for r in cls["tabela"]:
+        tid = r["time_id"]
+        if tid in empatados:
+            if not bloco_inserido:
+                ordem.extend(escolhidos + restantes)
+                bloco_inserido = True
+        else:
+            ordem.append(tid)
+
+    _criar_ou_atualizar_mata_mata(pelada_id, ordem, session)
+    return {"ok": True}
+
 
 @app.get("/estatisticas/gols")
 def ranking_gols(pelada_id: Optional[int] = None, session: Session = Depends(get_session)):
@@ -807,7 +1099,7 @@ def ranking_titulos(session: Session = Depends(get_session)):
 @app.get("/estatisticas/pontos-ano")
 def pontos_no_ano(ano: Optional[int] = None, session: Session = Depends(get_session)):
 
-    query = select(Pelada).where(Pelada.status == "finalizada")
+    query = select(Pelada).where(Pelada.status == "finalizada", Pelada.tipo != "torneio")
     if ano:
         query = query.where(col(Pelada.data) >= date(ano, 1, 1)).where(col(Pelada.data) <= date(ano, 12, 31))
     peladas = session.exec(query).all()
@@ -1331,8 +1623,11 @@ def gerar_resenha(
                 eventos_jogo.append(desc)
 
         placar = f"{jogo.gols_time_a} x {jogo.gols_time_b}"
+        if jogo.penaltis_a is not None and jogo.penaltis_b is not None:
+            placar += f" (pênaltis: {jogo.penaltis_a} x {jogo.penaltis_b})"
+        rotulo_fase = {"final": " — FINAL", "terceiro": " — Disputa de 3º lugar"}.get(jogo.fase, "")
         jogo_texto = (
-            f"Jogo {idx}: {nome_a} {placar} {nome_b} [status: {jogo.status}]\n"
+            f"Jogo {idx}{rotulo_fase}: {nome_a} {placar} {nome_b} [status: {jogo.status}]\n"
             + ("\n".join(eventos_jogo) if eventos_jogo else "  (sem gols registrados — jogo terminou 0 x 0)")
         )
         jogos_desc.append(jogo_texto)

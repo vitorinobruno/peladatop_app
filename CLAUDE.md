@@ -104,6 +104,12 @@ GET    /estatisticas/assistencias  ?pelada_id=
 GET    /estatisticas/titulos
 GET    /estatisticas/pontos-ano    ?ano=  (filtro opcional por ano)
 
+# Torneio de fim de ano
+GET    /peladas/{id}/torneio                → tabela 1ª fase (critérios oficiais), aguardando_sorteio, classificacao_final
+POST   /peladas/{id}/torneio/segunda-fase   body: { "finalistas": [time_id, ...] } — resolve empate por sorteio
+PUT    /jogos/{id}/penaltis                 ?penaltis_a=&penaltis_b=  (mata-mata empatado já finalizado)
+POST   /partidas/{id}/finalizar             aceita ?penaltis_a=&penaltis_b= (obrigatório se mata-mata empatado)
+
 # Resenha IA
 POST   /peladas/{id}/resenha       → gera resenha narrativa via Groq (retorna texto plain)
                                      body: { "detalhes_extras": "..." } (opcional)
@@ -137,6 +143,15 @@ POST   /peladas/{id}/resenha       → gera resenha narrativa via Groq (retorna 
 **Resenha gerada por IA:** `POST /peladas/{id}/resenha` usa Groq (modelo `llama-3.3-70b-versatile`) para gerar uma narrativa bem humorada da pelada com todos os jogos, gols e assistentes. Requer variável de ambiente `GROQ_API_KEY` no servidor. Aceita campo opcional `detalhes_extras` para enriquecer o texto com contexto fornecido pelos participantes.
 
 **Sorteio de times — goleiros excluídos:** Goleiros não entram no sorteio automático (`_sortearTimes`). Ficam disponíveis apenas para adição manual via seleção de atletas no card do time.
+
+**Torneio de fim de ano (`Pelada.tipo = "torneio"`):** lógica pura em `backend/torneio.py`.
+- 4 times obrigatórios, um de cada cor (Branco, Verde, Laranja, Azul); `POST /times` valida e pareia times por cor.
+- `POST /jogos` gera os 6 jogos da 1ª fase na ordem da tabela oficial (`TABELA_GRUPOS`), com `fase="grupos"` e `ordem` 1–6. Padrão no app: 16 min, pausável.
+- Ao finalizar o 6º jogo da 1ª fase, o backend gera automaticamente o jogo 07 (3º×4º, `fase="terceiro"`) e o 08 (1º×2º, `fase="final"`). Gol adicionado depois em jogo da 1ª fase recalcula a 2ª fase, se ela ainda não começou.
+- Desempate: pontos → confronto direto (com 3 ou mais empatados, mini-tabela entre eles: pontos, saldo, gols) → saldo geral → gols pró → sorteio. O sorteio é feito no campo e informado no app (`JogosScreen` mostra o card de escolha); ele só é exigido quando o empate cruza a fronteira 2º/3º.
+- Final e 3º lugar empatados exigem placar de pênaltis (`Jogo.penaltis_a/b`); os pênaltis não contam como gols.
+- Finalizar torneio: campeão = vencedor da final. **Não** incrementa `titulos` e é **excluído** de `/estatisticas/pontos-ano`. Gols e assistências contam normalmente.
+- Mobile: `CriarPeladaScreen` (switch Torneio), `TimesScreen` (trava em 4 times, sem sorteio), `JogosScreen` (1ª fase + tabela + 2ª fase), `PartidaScreen` (dialog de pênaltis), `ResultadosScreen` + `screens/resultados/torneio_resultados.dart` (resumo, texto WhatsApp e card 1080×1080).
 
 **Pause do cronômetro:** Campo `pausavel` no modelo `Jogo` (bool, default `false`). Configurado em `JogosScreen` via `SwitchListTile` antes de gerar os jogos — padrão `true` para peladas de 2 times, `false` para 3 times. O pause é **frontend-only**: cancela o `Timer.periodic` local, preservando `segundosRestantes`. O backend não é afetado. Registro de gols e finalização da partida continuam totalmente manuais independente do estado do cronômetro. Se o usuário sair da tela e voltar, `_calcularTempo()` recalcula o tempo a partir do wall clock (perde o estado de pause).
 

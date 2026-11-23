@@ -17,10 +17,12 @@ class Pelada(SQLModel, table=True):
     status: str = "planejada"
     campeao: Optional[str] = None
     deletada: bool = False
+    tipo: str = "normal"  # normal | torneio
 
 class PeladaCreate(SQLModel):
     data: date
     local: str
+    tipo: str = "normal"
 
 class Presenca(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -60,6 +62,12 @@ class Jogo(SQLModel, table=True):
 
     tempo_minutos: int
     pausavel: bool = False
+
+    # Torneio: fase (grupos | terceiro | final), número do jogo na tabela e pênaltis
+    fase: Optional[str] = None
+    ordem: Optional[int] = None
+    penaltis_a: Optional[int] = None
+    penaltis_b: Optional[int] = None
 
     status: str = "nao_iniciado"
     # valores: nao_iniciado | em_andamento | finalizado
